@@ -7,12 +7,12 @@ import (
 
 // TextFuncInfo holds information about a function found via regex parsing.
 type TextFuncInfo struct {
-	Name     string
-	Params   []string
-	Body     []string // lines of the function body
-	FilePath string
+	Name      string
+	Params    []string
+	Body      []string // lines of the function body
+	FilePath  string
 	StartLine int
-	Language string
+	Language  string
 }
 
 // TextCallGraph indexes functions from Python/JS/TS files for interprocedural analysis.
@@ -29,14 +29,14 @@ func NewTextCallGraph() *TextCallGraph {
 
 // Regex patterns for function definitions and parameter extraction.
 var (
-	pyFuncDefFull  = regexp.MustCompile(`^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)`)
-	jsFuncDefFull  = regexp.MustCompile(`^\s*(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)`)
-	jsArrowFull    = regexp.MustCompile(`^\s*(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(([^)]*)\)\s*=>`)
-	jsMethodFull   = regexp.MustCompile(`^\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{`)
+	pyFuncDefFull = regexp.MustCompile(`^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)`)
+	jsFuncDefFull = regexp.MustCompile(`^\s*(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)`)
+	jsArrowFull   = regexp.MustCompile(`^\s*(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(([^)]*)\)\s*=>`)
+	jsMethodFull  = regexp.MustCompile(`^\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{`)
 )
 
 // AddPythonFile indexes functions from a Python file.
-func (tcg *TextCallGraph) AddPythonFile(filePath string, content string) {
+func (tcg *TextCallGraph) AddPythonFile(filePath, content string) {
 	lines := strings.Split(content, "\n")
 
 	for i, line := range lines {
@@ -61,7 +61,7 @@ func (tcg *TextCallGraph) AddPythonFile(filePath string, content string) {
 }
 
 // AddJSFile indexes functions from a JavaScript/TypeScript file.
-func (tcg *TextCallGraph) AddJSFile(filePath string, content string, lang string) {
+func (tcg *TextCallGraph) AddJSFile(filePath, content, lang string) {
 	lines := strings.Split(content, "\n")
 
 	for i, line := range lines {
@@ -191,11 +191,9 @@ func analyzeTextFuncInterproc(tcg *TextCallGraph, info *TextFuncInfo, taintedPar
 	var flows []TaintFlow
 
 	// Mark parameters as tainted.
-	if taintedParams != nil {
-		for idx, src := range taintedParams {
-			if idx < len(info.Params) {
-				state.Mark(info.Params[idx], src)
-			}
+	for idx, src := range taintedParams {
+		if idx < len(info.Params) {
+			state.Mark(info.Params[idx], src)
 		}
 	}
 
@@ -256,14 +254,7 @@ func analyzeTextFuncInterproc(tcg *TextCallGraph, info *TextFuncInfo, taintedPar
 						if len(taintedArgs) > 0 {
 							childCtx := ctx.Push(calleeName)
 							childFlows := analyzeTextFuncInterproc(tcg, callee, taintedArgs, childCtx, lang)
-							for j := range childFlows {
-								childFlows[j].FuncName = info.Name + " -> " + childFlows[j].FuncName
-								if childFlows[j].RuleID == "TAINT-001" {
-									childFlows[j].RuleID = "TAINT-006"
-								} else if childFlows[j].RuleID == "TAINT-002" {
-									childFlows[j].RuleID = "TAINT-007"
-								}
-							}
+							promoteInterproc(childFlows, info.Name)
 							flows = append(flows, childFlows...)
 						}
 					}
@@ -299,14 +290,7 @@ func analyzeTextFuncInterproc(tcg *TextCallGraph, info *TextFuncInfo, taintedPar
 					if len(taintedArgs) > 0 {
 						childCtx := ctx.Push(calleeName)
 						childFlows := analyzeTextFuncInterproc(tcg, callee, taintedArgs, childCtx, lang)
-						for j := range childFlows {
-							childFlows[j].FuncName = info.Name + " -> " + childFlows[j].FuncName
-							if childFlows[j].RuleID == "TAINT-001" {
-								childFlows[j].RuleID = "TAINT-006"
-							} else if childFlows[j].RuleID == "TAINT-002" {
-								childFlows[j].RuleID = "TAINT-007"
-							}
-						}
+						promoteInterproc(childFlows, info.Name)
 						flows = append(flows, childFlows...)
 					}
 				}
@@ -328,9 +312,10 @@ func buildTextTaintedParams(line, funcName string, state *TaintState) map[int]Ta
 	depth := 1
 	argEnd := argStart
 	for argEnd < len(line) && depth > 0 {
-		if line[argEnd] == '(' {
+		switch line[argEnd] {
+		case '(':
 			depth++
-		} else if line[argEnd] == ')' {
+		case ')':
 			depth--
 		}
 		if depth > 0 {

@@ -150,11 +150,9 @@ func analyzeGoFuncInterproc(cg *CallGraph, info *FuncInfo, taintedParams map[int
 	state := NewTaintState()
 
 	// Mark parameters as tainted if they were tainted by the caller.
-	if taintedParams != nil {
-		for idx, src := range taintedParams {
-			if idx < len(info.Params) {
-				state.Mark(info.Params[idx], src)
-			}
+	for idx, src := range taintedParams {
+		if idx < len(info.Params) {
+			state.Mark(info.Params[idx], src)
 		}
 	}
 
@@ -309,14 +307,7 @@ func analyzeGoAssignInterproc(cg *CallGraph, fset *token.FileSet, filePath, func
 						childCtx := ctx.Push(calleeName)
 						childFlows := analyzeGoFuncInterproc(cg, callee, taintedParams, childCtx)
 
-						for j := range childFlows {
-							childFlows[j].FuncName = funcName + " -> " + childFlows[j].FuncName
-							if childFlows[j].RuleID == "TAINT-001" {
-								childFlows[j].RuleID = "TAINT-006"
-							} else if childFlows[j].RuleID == "TAINT-002" {
-								childFlows[j].RuleID = "TAINT-007"
-							}
-						}
+						promoteInterproc(childFlows, funcName)
 						flows = append(flows, childFlows...)
 					}
 				}
@@ -390,20 +381,27 @@ func analyzeGoCallInterproc(cg *CallGraph, fset *token.FileSet, filePath, funcNa
 				childCtx := ctx.Push(calleeName)
 				childFlows := analyzeGoFuncInterproc(cg, callee, taintedParams, childCtx)
 
-				for j := range childFlows {
-					childFlows[j].FuncName = funcName + " -> " + childFlows[j].FuncName
-					if childFlows[j].RuleID == "TAINT-001" {
-						childFlows[j].RuleID = "TAINT-006"
-					} else if childFlows[j].RuleID == "TAINT-002" {
-						childFlows[j].RuleID = "TAINT-007"
-					}
-				}
+				promoteInterproc(childFlows, funcName)
 				flows = append(flows, childFlows...)
 			}
 		}
 	}
 
 	return flows
+}
+
+// promoteInterproc re-tags intraprocedural rules to interprocedural equivalents
+// and prefixes the function name with the caller chain.
+func promoteInterproc(flows []TaintFlow, callerFunc string) {
+	for j := range flows {
+		flows[j].FuncName = callerFunc + " -> " + flows[j].FuncName
+		switch flows[j].RuleID {
+		case "TAINT-001":
+			flows[j].RuleID = "TAINT-006"
+		case "TAINT-002":
+			flows[j].RuleID = "TAINT-007"
+		}
+	}
 }
 
 // calleeNameFromExpr extracts the simple function name from a call expression.
@@ -445,11 +443,12 @@ func deduplicateFlows(flows []TaintFlow) []TaintFlow {
 	}
 	seen := make(map[key]bool)
 	var result []TaintFlow
-	for _, f := range flows {
+	for i := range flows {
+		f := &flows[i]
 		k := key{f.RuleID, f.FilePath, f.FuncName, f.Source.Line, f.SinkLine}
 		if !seen[k] {
 			seen[k] = true
-			result = append(result, f)
+			result = append(result, flows[i])
 		}
 	}
 	return result
