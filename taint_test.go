@@ -124,8 +124,13 @@ func TestMatchGoSink(t *testing.T) {
 		{"db.Query", true, "TAINT-001"},
 		{"exec.Command", true, "TAINT-002"},
 		{"template.HTML", true, "TAINT-003"},
+		{"w.Write", true, "TAINT-003"},
 		{"os.ReadFile", true, "TAINT-004"},
 		{"fmt.Println", false, ""},
+		// fmt.Fprintf is general formatted output, not an XSS sink: CLI
+		// stdout/stderr and log writes must not be flagged as XSS.
+		{"fmt.Fprintf", false, ""},
+		{"fmt.Fprintln", false, ""},
 	}
 
 	for _, tt := range tests {

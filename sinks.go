@@ -29,10 +29,15 @@ var goSinkSelectors = []struct {
 	{"exec.Command", "TAINT-002", "CWE-78"},
 	{"exec.CommandContext", "TAINT-002", "CWE-78"},
 	{"syscall.Exec", "TAINT-002", "CWE-78"},
-	// XSS (TAINT-003)
+	// XSS (TAINT-003): only HTML-rendering sinks. template.HTML emits
+	// unescaped markup; w.Write is the http.ResponseWriter convention.
+	// fmt.Fprintf is deliberately NOT here — it is general formatted output
+	// (CLI stdout/stderr, log files, buffers) and the selector matcher cannot
+	// tell whether its writer is an http.ResponseWriter, so treating every
+	// fmt.Fprintf as an XSS sink produced overwhelming false positives on
+	// command-line tools and examples.
 	{"template.HTML", "TAINT-003", "CWE-79"},
 	{"w.Write", "TAINT-003", "CWE-79"},
-	{"fmt.Fprintf", "TAINT-003", "CWE-79"},
 	// File (TAINT-004)
 	{"os.Open", "TAINT-004", "CWE-22"},
 	{"os.ReadFile", "TAINT-004", "CWE-22"},
