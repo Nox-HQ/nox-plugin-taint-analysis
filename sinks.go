@@ -43,6 +43,24 @@ var goSinkSelectors = []struct {
 	{"os.ReadFile", "TAINT-004", "CWE-22"},
 	{"os.WriteFile", "TAINT-004", "CWE-22"},
 	{"os.Create", "TAINT-004", "CWE-22"},
+	// --- AI sinks -----------------------------------------------------------
+	// Tainted data reaching a model call. These are gated by taint flow: a
+	// selector below only produces a finding when attacker-controlled data
+	// actually reaches it, so a bare API call is not flagged.
+	//
+	// AI prompt injection (TAINT-AI-001): untrusted input reaching a completion.
+	{"openai.Client", "TAINT-AI-001", "CWE-77"},
+	{"CreateChatCompletion", "TAINT-AI-001", "CWE-77"},
+	{"ChatCompletionStream", "TAINT-AI-001", "CWE-77"},
+	{"Messages.New", "TAINT-AI-001", "CWE-77"},
+	{"Messages.Stream", "TAINT-AI-001", "CWE-77"},
+	{"GenerateContent", "TAINT-AI-001", "CWE-77"},
+	// AI embedding exposure (TAINT-AI-002): sensitive data leaving via embeddings.
+	{"CreateEmbeddings", "TAINT-AI-002", "CWE-200"},
+	{"client.Embed", "TAINT-AI-002", "CWE-200"},
+	// AI tool-call arguments (TAINT-AI-003): untrusted input shaping a tool call.
+	{"openai.Tool", "TAINT-AI-003", "CWE-77"},
+	{"anthropic.Tool", "TAINT-AI-003", "CWE-77"},
 }
 
 // MatchGoSink checks if a flattened selector chain matches a Go sink.
@@ -79,6 +97,17 @@ var pythonSinks = []sinkDef{
 	{regexp.MustCompile(`yaml\.load\(`), "TAINT-005", "CWE-94"},
 	{regexp.MustCompile(`yaml\.unsafe_load\(`), "TAINT-005", "CWE-94"},
 	{regexp.MustCompile(`\beval\(`), "TAINT-005", "CWE-94"},
+	// --- AI sinks (see goSinkSelectors for rationale) ------------------------
+	{regexp.MustCompile(`chat\.completions\.create\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`completions\.create\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`ChatCompletion\.create\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`messages\.create\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`generate_content\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`litellm\.completion\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`embeddings\.create\(`), "TAINT-AI-002", "CWE-200"},
+	{regexp.MustCompile(`cohere\.embed\(`), "TAINT-AI-002", "CWE-200"},
+	{regexp.MustCompile(`embed_content\(`), "TAINT-AI-002", "CWE-200"},
+	{regexp.MustCompile(`SentenceTransformer\([^)]*\)\.encode\(`), "TAINT-AI-002", "CWE-200"},
 }
 
 // jsSinks are regex patterns for JavaScript/TypeScript sinks.
@@ -104,6 +133,11 @@ var jsSinks = []sinkDef{
 	// Code/Deser (TAINT-005)
 	{regexp.MustCompile(`\beval\(`), "TAINT-005", "CWE-94"},
 	{regexp.MustCompile(`\bFunction\(`), "TAINT-005", "CWE-94"},
+	// --- AI sinks (see goSinkSelectors for rationale) ------------------------
+	{regexp.MustCompile(`chat\.completions\.create\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`messages\.create\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`generateContent\(`), "TAINT-AI-001", "CWE-77"},
+	{regexp.MustCompile(`embeddings\.create\(`), "TAINT-AI-002", "CWE-200"},
 }
 
 // MatchTextSink checks if a line matches a sink pattern for the given language.
