@@ -3,7 +3,7 @@ module github.com/nox-hq/nox-plugin-taint-analysis
 go 1.25.6
 
 require (
-	github.com/nox-hq/nox v1.12.2
+	github.com/nox-hq/nox v1.13.0
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 )
