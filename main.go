@@ -100,7 +100,7 @@ func handleScan(ctx context.Context, req sdk.ToolRequest) (*pluginv1.InvokeToolR
 		}
 
 		// Phase 1: Intraprocedural analysis (existing).
-		if scanErr := scanFileForTaint(resp, path, lang); scanErr != nil {
+		if scanErr := scanFileForTaint(resp, path, lang, workspaceRoot); scanErr != nil {
 			return nil
 		}
 
@@ -133,27 +133,27 @@ func handleScan(ctx context.Context, req sdk.ToolRequest) (*pluginv1.InvokeToolR
 	for _, files := range goFilesByDir {
 		if len(files) > 1 {
 			interprocFlows := AnalyzeGoFileInterprocedural(files)
-			emitInterproceduralFlows(resp, interprocFlows)
+			emitInterproceduralFlows(resp, interprocFlows, workspaceRoot)
 		}
 	}
 
 	// Phase 2: Interprocedural analysis — Python.
 	if len(pyFiles) > 1 {
 		interprocFlows := AnalyzeTextFilesInterprocedural(pyFiles, "python")
-		emitInterproceduralFlows(resp, interprocFlows)
+		emitInterproceduralFlows(resp, interprocFlows, workspaceRoot)
 	}
 
 	// Phase 2: Interprocedural analysis — JS/TS.
 	if len(jsFiles) > 1 {
 		interprocFlows := AnalyzeTextFilesInterprocedural(jsFiles, "javascript")
-		emitInterproceduralFlows(resp, interprocFlows)
+		emitInterproceduralFlows(resp, interprocFlows, workspaceRoot)
 	}
 
 	return resp.Build(), nil
 }
 
 // emitInterproceduralFlows converts cross-function taint flows to findings.
-func emitInterproceduralFlows(resp *sdk.ResponseBuilder, flows []TaintFlow) {
+func emitInterproceduralFlows(resp *sdk.ResponseBuilder, flows []TaintFlow, root string) {
 	for i := range flows {
 		flow := &flows[i]
 		info, ok := ruleInfo[flow.RuleID]
@@ -177,7 +177,7 @@ func emitInterproceduralFlows(resp *sdk.ResponseBuilder, flows []TaintFlow) {
 			info.Confidence,
 			message,
 		).
-			At(flow.FilePath, flow.Source.Line, flow.SinkLine).
+			At(reportPath(root, flow.FilePath), flow.Source.Line, flow.SinkLine).
 			WithMetadata("cwe", flow.CWE).
 			WithMetadata("language", flow.Language).
 			WithMetadata("source_kind", flow.Source.Kind).
@@ -186,12 +186,12 @@ func emitInterproceduralFlows(resp *sdk.ResponseBuilder, flows []TaintFlow) {
 			WithMetadata("sink_line", fmt.Sprintf("%d", flow.SinkLine)).
 			WithMetadata("function", flow.FuncName).
 			WithMetadata("interprocedural", "true").
-			WithFingerprint(fingerprint(flow)).
+			WithFingerprint(fingerprint(flow, root)).
 			Done()
 	}
 }
 
-func scanFileForTaint(resp *sdk.ResponseBuilder, filePath, lang string) error {
+func scanFileForTaint(resp *sdk.ResponseBuilder, filePath, lang, root string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil
@@ -229,7 +229,7 @@ func scanFileForTaint(resp *sdk.ResponseBuilder, filePath, lang string) error {
 			info.Confidence,
 			message,
 		).
-			At(flow.FilePath, flow.Source.Line, flow.SinkLine).
+			At(reportPath(root, flow.FilePath), flow.Source.Line, flow.SinkLine).
 			WithMetadata("cwe", flow.CWE).
 			WithMetadata("language", flow.Language).
 			WithMetadata("source_kind", flow.Source.Kind).
@@ -237,17 +237,38 @@ func scanFileForTaint(resp *sdk.ResponseBuilder, filePath, lang string) error {
 			WithMetadata("source_line", fmt.Sprintf("%d", flow.Source.Line)).
 			WithMetadata("sink_line", fmt.Sprintf("%d", flow.SinkLine)).
 			WithMetadata("function", flow.FuncName).
-			WithFingerprint(fingerprint(flow)).
+			WithFingerprint(fingerprint(flow, root)).
 			Done()
 	}
 
 	return nil
 }
 
-func fingerprint(flow *TaintFlow) string {
+// reportPath converts an absolute scan path into a workspace-relative,
+// slash-separated one.
+//
+// This matters more than it looks: the walk hands us paths prefixed with
+// workspaceRoot, and that value is wherever the scan happened to run — a CI
+// checkout, a developer's clone, a git worktree. Feeding it into fingerprint()
+// made the fingerprint of an unchanged finding differ per scan directory, so a
+// baseline generated in one place silently failed to suppress the same finding
+// in another, and the CI gate then reported it as net-new. Normalising the
+// separator keeps Windows and Unix agreeing on the same digest.
+func reportPath(root, path string) string {
+	if root == "" {
+		return filepath.ToSlash(path)
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return filepath.ToSlash(path)
+	}
+	return filepath.ToSlash(rel)
+}
+
+func fingerprint(flow *TaintFlow, root string) string {
 	return fmt.Sprintf("taint:%s:%s:%s:%d:%d",
 		flow.RuleID,
-		flow.FilePath,
+		reportPath(root, flow.FilePath),
 		flow.FuncName,
 		flow.Source.Line,
 		flow.SinkLine,
