@@ -82,7 +82,8 @@ func TestFingerprintStillDistinguishesFindings(t *testing.T) {
 // TestReportPathNormalisesSeparators keeps Windows and Unix agreeing on one
 // digest for the same file.
 func TestReportPathNormalisesSeparators(t *testing.T) {
-	got := reportPath("/repo", filepath.Join("/repo", "internal", "kernel", "sink.go"))
+	root := string(filepath.Separator) + "repo"
+	got := reportPath(root, filepath.Join(root, "internal", "kernel", "sink.go"))
 	if want := "internal/kernel/sink.go"; got != want {
 		t.Errorf("reportPath = %q, want %q", got, want)
 	}
