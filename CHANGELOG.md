@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+- chore(deps): Go 1.26.5 and nox SDK v1.17.0 (#30)
+- chore(security): nox remediation (deps + actions) (#29)
+- ci: add nox-remediate caller (deps + action-pin remediation)
+- ci: point the registry notice at where entries actually go (#28)
+- ci: add nox self-scan and changed-files PR gate (#27)
+
+
 ## [Unreleased]
 
 ## [v0.7.0] - 2026-07-18
