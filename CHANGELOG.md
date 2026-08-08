@@ -14,6 +14,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.3] - 2026-08-08
+
+### Fixed
+
+- Taint fingerprints no longer depend on the directory the scan ran in (#31)
+
+  `reportPath` makes finding locations workspace-relative before they reach
+  `fingerprint()`. Previously the walk handed absolute paths through, so the
+  same finding on the same commit hashed differently in a CI checkout, a
+  developer clone and a git worktree:
+
+      local checkout  f2fc80a3...
+      git worktree    6a6e14b1...
+      CI runner       2ec40d1d...
+
+  A baseline entry was therefore only valid on the machine that produced it:
+  `nox baseline add` locally left CI reporting the same reviewed finding as
+  net-new, and the gate failed. Consumers had to exclude whole files to work
+  around it.
+
+  The fix landed 41 minutes after the v0.7.2 tag and has been unreleased since
+  2026-07-25, so every install until now carried the old behaviour.
+
+### Changed
+
+- nox SDK 1.17.0 -> 1.24.0, nox action 1.19.0 -> 1.24.0, actions/setup-go 6.5.0 -> 7.0.0
+- Dependency and action-pin remediation (#33, #36)
+
+
 ## [v0.7.0] - 2026-07-18
 
 ### Added
